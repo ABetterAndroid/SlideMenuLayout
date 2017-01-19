@@ -36,13 +36,15 @@ public class SlideMenuLayout extends RelativeLayout {
     private View mainChildView;
     private onMenuClickListener onMenuClickListener;
     private OnClickListener l;
+    private int touchSlop;
 
     public SlideMenuLayout(Context context) {
-        super(context);
+        this(context, null);
     }
 
     public SlideMenuLayout(Context context, AttributeSet attrs) {
         super(context, attrs);
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         mMaximumVelocity = ViewConfiguration.get(context)
                 .getScaledMaximumFlingVelocity();
         mVelocityTracker = VelocityTracker.obtain();
@@ -51,9 +53,20 @@ public class SlideMenuLayout extends RelativeLayout {
         setWillNotDraw(false);
     }
 
-    public SlideMenuLayout setONMenuClickListener(onMenuClickListener onMenuClickListener) {
+    public SlideMenuLayout setOnMenuClickListener(onMenuClickListener onMenuClickListener) {
         this.onMenuClickListener = onMenuClickListener;
         return this;
+    }
+
+    public SlideMenuLayout setMenuBackgroundColor(int color) {
+        menuChildView.setBackgroundColor(color);
+        invalidate();
+        return this;
+    }
+
+    public void setMenuClosed() {
+        canvasTranslation = 0;
+        invalidate();
     }
 
     @Override
@@ -73,6 +86,11 @@ public class SlideMenuLayout extends RelativeLayout {
             canvas.concat(matrix);
             drawChild(canvas, mainChildView, System.currentTimeMillis());
         }
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        return true;
     }
 
     @Override
@@ -109,6 +127,12 @@ public class SlideMenuLayout extends RelativeLayout {
                     return super.onTouchEvent(event);
                 }
 
+                if (Math.abs(x2 - actionDownPoint.x) < touchSlop) {
+                    x1 = x2;
+                    y1 = y2;
+                    return super.onTouchEvent(event);
+                }
+
                 if (smoothAnim != null && smoothAnim.isRunning()) {
                     smoothAnim.cancel();
                 }
@@ -132,10 +156,11 @@ public class SlideMenuLayout extends RelativeLayout {
 
                 if (canvasTranslation != 0) {
                     float endValue = 0;
-                    long flingDuration = 200;
+                    long flingDuration = 300;
                     if ((canvasTranslation < -slidableDistance / 8 && !slideRight) || canvasTranslation < -7 * slidableDistance / 8) {
                         flingDuration = (long) Math.abs((-slidableDistance - canvasTranslation) / xVel);
-                        flingDuration = flingDuration > 200 ? 200 : flingDuration;
+                        flingDuration = flingDuration > 300 ? 300 : flingDuration;
+                        flingDuration = flingDuration < 200 ? 200 : flingDuration;
                         endValue = -slidableDistance;
                     } else if (canvasTranslation < 0 && canvasTranslation > -7 * slidableDistance / 8 && slideRight) {
                         endValue = 0;
@@ -146,11 +171,11 @@ public class SlideMenuLayout extends RelativeLayout {
                             onMenuClickListener.onMenuClick();
                         }
                         endValue = 0;
-                        flingDuration = 200;
+                        flingDuration = 300;
                     }
 
                     smoothToEnd(canvasTranslation, endValue, flingDuration);
-                } else if (l != null) {
+                } else if (l != null && actionDownPoint.equals(event.getX(), event.getY())) {
                     l.onClick(this);
                 }
                 return true;
@@ -189,7 +214,7 @@ public class SlideMenuLayout extends RelativeLayout {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         for (int i = 0; i < getChildCount(); i++) {
             int childWidth = getChildAt(i).getMeasuredWidth();
-            if (childWidth < w) {
+            if (childWidth < w && childWidth > 10) {
                 slidableDistance = childWidth;
                 menuChildView = getChildAt(i);
             } else {
